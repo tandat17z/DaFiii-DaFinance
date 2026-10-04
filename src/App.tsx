@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { AppHeader, AppMain, headerTabClass } from '@tada/kit/layout'
 import { AppBrand } from '@tada/kit/brand'
 import { changelog } from './config/changelog'
 import { ApiNotice } from './components/ApiNotice'
@@ -35,6 +36,13 @@ function linkedTransactionId(): string | null {
   const m = /^\/tx\/([A-Za-z0-9-]{1,100})\/?$/.exec(window.location.pathname)
   return m ? m[1] : null
 }
+
+/** The $ of public/icons/icon-mark.svg, in the logo mark's colour. */
+const DollarIcon = () => (
+  <svg viewBox="7 6 18 20" className="h-3.5 w-[13px]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+    <path d="M16 7v18M20.5 11H14a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6h-7" />
+  </svg>
+)
 
 export default function App() {
   const { t, locale, setLocale } = useI18n()
@@ -159,48 +167,37 @@ export default function App() {
 
   return (
     <div className="min-h-dvh">
-      {/* One slim sticky header. Phone / tablet: row 1 = brand + month + account, row 2 = view tabs.
-          lg: a single row. xl: tabs centred on the page. */}
-      <header className="sticky top-0 z-10 border-b border-border bg-bg/85 backdrop-blur">
-        <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-3 gap-y-0 px-4 pt-1.5 sm:px-6 lg:flex-nowrap lg:gap-x-4 lg:pt-0 xl:grid xl:grid-cols-[1fr_auto_1fr]">
-          <div className="order-1 flex shrink-0 items-center gap-2 whitespace-nowrap sm:gap-3 lg:py-2">
+      <AppHeader
+        brand={
+          <>
             <AppBrand
               name="DaFinance"
-              logo={<span className="grid h-6 place-items-center rounded-md bg-accent/15 px-1.5 font-mono text-xs font-semibold text-accent">DaFiii</span>}
+              shortName="DaFiii"
+              icon={<DollarIcon />}
               changelog={changelog}
               nameClassName="hidden sm:inline lg:hidden 2xl:inline"
               locale={locale}
             />
             <DataModeBadge />
-          </div>
-          <div role="tablist" aria-label={t('view.label')} className="order-3 flex w-full justify-center sm:gap-1 lg:order-2 lg:mx-auto lg:w-auto xl:justify-self-center">
-            {VIEWS.map(([id, labelKey]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={view === id}
-                onClick={() => setView(id)}
-                className={cn(
-                  'flex-1 border-b-2 px-2 py-1.5 text-sm font-medium whitespace-nowrap transition-colors sm:px-5 lg:flex-none lg:px-3.5 lg:py-[1.125rem] xl:px-5',
-                  view === id ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg',
-                )}
-              >
-                {t(labelKey)}
-              </button>
-            ))}
-          </div>
-          <div className="order-2 ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3 lg:order-3 lg:flex-none lg:py-2 xl:justify-self-end">
-            {(view === 'month' || view === 'entry') && <PeriodBar className="min-w-0 flex-1 justify-center lg:flex-none" unit={unit} anchor={anchor} onChange={setPeriod} marked={markedDates} />}
-            <div className="flex shrink-0 items-center gap-2 max-sm:[&_summary>span:last-of-type]:hidden max-sm:[&_summary>svg]:hidden sm:gap-3">
-              <SettingsLauncher button={STANDALONE} />
-              {!STANDALONE && <tdz-account key={locale} lang={locale} me-url={API_ME_URL} account-url={API_ACCOUNT_URL} feedback-url={API_FEEDBACK_URL} languages={Object.keys(LOCALES).join(';')} settings />}
-            </div>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+        navProps={{ role: 'tablist', 'aria-label': t('view.label') }}
+        nav={VIEWS.map(([id, labelKey]) => (
+          <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)} className={headerTabClass(view === id)}>
+            {t(labelKey)}
+          </button>
+        ))}
+        actionsClassName="flex-1 lg:flex-none"
+        actions={<>{(view === 'month' || view === 'entry') && <PeriodBar className="min-w-0 flex-1 justify-center lg:flex-none" unit={unit} anchor={anchor} onChange={setPeriod} marked={markedDates} />}</>}
+        account={
+          <>
+            <SettingsLauncher button={STANDALONE} />
+            {!STANDALONE && <tdz-account key={locale} lang={locale} me-url={API_ME_URL} account-url={API_ACCOUNT_URL} feedback-url={API_FEEDBACK_URL} languages={Object.keys(LOCALES).join(';')} settings />}
+          </>
+        }
+      />
 
-      <main className="mx-auto grid max-w-screen-2xl grid-cols-[minmax(0,1fr)] gap-5 px-4 py-4 sm:px-6 sm:py-6">
+      <AppMain>
         <StorageNotice
           onMoved={() => {
             all.reload()
@@ -395,7 +392,7 @@ export default function App() {
             />
           </>
         )}
-      </main>
+      </AppMain>
     </div>
   )
 }

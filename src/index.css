@@ -2,42 +2,12 @@
 /* Colour tokens shared by the tandat17z apps (and the Tailwind theme for them). Dark by default. */
 @import '@tada/kit/tokens.css';
 
-/* Light theme (Settings → Appearance sets data-theme on <html>): same token names, light values. */
-:root[data-theme='light'] {
-  color-scheme: light;
-
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --surface-2: #eceef2;
-  --border: #e1e4e9;
-  --border-strong: #cdd2d9;
-  --fg: #15181c;
-  --muted: #4d5560;
-  --subtle: #69717c;
-  --accent: #0e9a76;
-  --accent-fg: #ffffff;
-
-  --income: #0e9a76;
-  --expense: #d2453b;
-
-  --cat-1: #e0564c;
-  --cat-2: #d98b1c;
-  --cat-3: #13a37f;
-  --cat-4: #2f7fd6;
-  --cat-5: #8156d9;
-  --cat-other: #9aa2ad;
-  --inc-1: #0e9a76;
-  --inc-2: #0f9bbd;
-  --inc-3: #3c9e44;
-  --inc-4: #3a74e0;
-  --inc-5: #7e9f12;
-
-  --over: #e8730c;
-}
-
-/* Orange for spending over its category budget (not in the kit). */
+/* Orange for spending over its category budget (not in the kit); the light theme itself is in the kit. */
 :root {
   --over: #fb923c;
+}
+:root[data-theme='light'] {
+  --over: #e8730c;
 }
 
 @theme inline {
@@ -64,13 +34,6 @@
     border-radius: 4px;
   }
 
-  input,
-  select {
-    color-scheme: dark;
-  }
-  :root[data-theme='light'] :is(input, select) {
-    color-scheme: light;
-  }
 }
 
 @layer components {

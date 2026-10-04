@@ -1,6 +1,9 @@
+import { applyTheme, type Theme } from '@tada/kit/theme'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { categories, categoryKey, DEFAULT_ICONS, TRANSFER_CATEGORIES } from '../config/categories'
 import type { TxType } from './types'
+
+export type { Theme }
 
 /** A category the user added. `key` is stored on transactions; `name` is shown as typed (never translated). */
 export interface CustomCategory {
@@ -10,7 +13,6 @@ export interface CustomCategory {
   icon: string
 }
 
-export type Theme = 'dark' | 'light'
 
 /**
  * Preferences: kept in this browser, and synced to the API (`/settings`) when data lives on the server
@@ -51,7 +53,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState(read)
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.theme
+    applyTheme(settings.theme)
     try {
       localStorage.setItem(KEY, JSON.stringify(settings))
     } catch {

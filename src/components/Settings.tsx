@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { LOCALES, type Locale } from '@tada/kit/i18n'
+import { ThemePicker } from '@tada/kit/theme'
 import { ICON_GROUPS, type IconGroup } from '../config/categories'
 import { cn } from '../lib/cn'
 import { useFormat } from '../lib/format'
@@ -8,7 +9,6 @@ import { useInstall } from '../lib/install'
 import { useCategories, useSettings, type Theme } from '../lib/settings'
 import type { TxType } from '../lib/types'
 import { useI18n } from '../locales'
-import { LinkSection } from './LinkSection'
 import { Button } from './ui'
 
 /**
@@ -101,7 +101,6 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             </div>
           </section>
 
-          <LinkSection />
 
           <section className="grid gap-3">
             <h3 className="font-mono text-[11px] tracking-wider text-subtle uppercase">{t('install.title')}</h3>
@@ -110,26 +109,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
               : <p className="text-sm text-muted">{t(app.state === 'installed' ? 'install.done' : app.state === 'ios' ? 'install.ios' : 'install.manual')}</p>}
           </section>
 
-          <section className="grid gap-3">
-            <h3 className="font-mono text-[11px] tracking-wider text-subtle uppercase">{t('settings.appearance')}</h3>
-            <div role="radiogroup" aria-label={t('settings.appearance')} className="grid grid-cols-2 gap-2">
-              {(['dark', 'light'] as const).map((th) => (
-                <button
-                  key={th}
-                  type="button"
-                  role="radio"
-                  aria-checked={settings.theme === th}
-                  onClick={() => setTheme(th)}
-                  className={cn('flex items-center gap-3 rounded-xl border p-3 text-left text-sm transition-colors', settings.theme === th ? 'border-accent bg-accent/10' : 'border-border hover:border-border-strong')}
-                >
-                  <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-base">
-                    {th === 'dark' ? '☾' : '☀'}
-                  </span>
-                  {t(th === 'dark' ? 'settings.dark' : 'settings.light')}
-                </button>
-              ))}
-            </div>
-          </section>
+          <ThemePicker value={settings.theme} onChange={setTheme} locale={locale} />
 
           <section className="grid gap-3">
             <h3 className="font-mono text-[11px] tracking-wider text-subtle uppercase">{t('settings.categories')}</h3>

@@ -3,6 +3,14 @@
 All notable changes to DaFinance. Newest first. The in-app version dialog reads the same list from
 `src/config/changelog.ts` (English and Vietnamese) — update both on every release.
 
+## 1.3.2 — 2026-10-04
+
+### Changed
+- New logo mark (icon and short name on a tinted tile) and the shared page layout, from `@tada/kit`
+  v0.3.0; the appearance picker is the kit's too.
+- New home-screen icon; the installed app is named DaFinance.
+- Removed the linked-email section from Settings (links are approved by the owner in the hub).
+
 ## 1.3.0 — 2026-10-04
 
 ### Added

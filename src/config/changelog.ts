@@ -3,6 +3,16 @@ import type { ChangelogEntry } from '@tada/kit/brand'
 /** Newest first. The first entry is the version shown in the header: add a new one on every release. */
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.3.2',
+    date: '2026-10-04',
+    changes: [
+      { kind: 'changed', text: { en: 'New logo mark (icon and short name on a tinted tile), the same in every app, and the shared page layout', vi: 'Logo mới (icon và tên gọn trên nền xanh), giống mọi app, và khung giao diện dùng chung' } },
+      { kind: 'changed', text: { en: 'New home-screen icon; the installed app is named DaFinance', vi: 'Icon màn hình chính mới; app cài đặt có tên DaFinance' } },
+      { kind: 'changed', text: { en: 'Appearance picker from the shared kit (@tada/kit v0.3.0)', vi: 'Bộ chọn giao diện dùng chung từ kit (@tada/kit v0.3.0)' } },
+      { kind: 'changed', text: { en: 'Removed the linked-email section from Settings (links are approved by the owner)', vi: 'Bỏ mục liên kết email khỏi Cài đặt (liên kết do chủ app duyệt)' } },
+    ],
+  },
+  {
     version: '1.3.1',
     date: '2026-10-04',
     changes: [
