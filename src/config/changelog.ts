@@ -3,6 +3,13 @@ import type { ChangelogEntry } from '@tada/kit/brand'
 /** Newest first. The first entry is the version shown in the header: add a new one on every release. */
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.3.3',
+    date: '2026-10-04',
+    changes: [
+      { kind: 'changed', text: { en: 'Logo mark with a bigger icon and a smaller short name underneath; new home-screen icon to match (@tada/kit v0.3.1)', vi: 'Logo có icon to hơn, tên gọn nhỏ hơn ở dưới; icon màn hình chính mới cho khớp (@tada/kit v0.3.1)' } },
+    ],
+  },
+  {
     version: '1.3.2',
     date: '2026-10-04',
     changes: [

@@ -39,7 +39,7 @@ function linkedTransactionId(): string | null {
 
 /** The $ of public/icons/icon-mark.svg, in the logo mark's colour. */
 const DollarIcon = () => (
-  <svg viewBox="7 6 18 20" className="h-3.5 w-[13px]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+  <svg viewBox="7 6 18 20" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
     <path d="M16 7v18M20.5 11H14a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6h-7" />
   </svg>
 )
