@@ -3,6 +3,18 @@ import type { ChangelogEntry } from '@tada/kit/brand'
 /** Newest first. The first entry is the version shown in the header: add a new one on every release. */
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.4.0',
+    date: '2026-10-11',
+    changes: [
+      { kind: 'added', text: { en: 'Take money out of a savings deposit or investment to spend (Entry → Wealth → Take out): part of it or all of it; the holding goes down, the cash balance up, and any profit is booked as interest income', vi: 'Rút tiền từ tiết kiệm / đầu tư ra để chi tiêu (Nhập liệu → Tích lũy → Rút ra): rút một phần hoặc tất toán; khoản tích lũy giảm, số dư tiền mặt tăng, phần lãi ghi vào thu nhập mục Lãi' } },
+      { kind: 'added', text: { en: 'Wealth history: every deposit, withdrawal and profit taken, per holding; emptied holdings are kept under "Closed"', vi: 'Lịch sử tích lũy: mọi lần gửi vào, rút ra và lãi đã chốt, lọc theo từng khoản; khoản đã rút hết được giữ ở mục "Đã tất toán"' } },
+      { kind: 'added', text: { en: 'Withdrawals on the calendar (↓ and amount) and in the Wealth donut, with the net flow in the middle', vi: 'Tiền rút hiện trên lịch (↓ và số tiền) và trong biểu đồ quạt Tích lũy, giữa vòng là số ròng' } },
+      { kind: 'changed', text: { en: 'Editing an entry shows the fields of its kind: income / expense, money put into wealth, taken out, or profit taken', vi: 'Sửa giao dịch hiện đúng các trường theo loại: thu / chi, gửi vào tích lũy, rút ra, hay lãi đã chốt' } },
+      { kind: 'changed', text: { en: 'Tidier calendar: month totals in one row, the key behind an (i) button, day cells never squeezed', vi: 'Lịch gọn hơn: ô tổng tháng một hàng, chú thích nằm trong nút (i), ô ngày không còn bị ép chồng lên nhau' } },
+      { kind: 'changed', text: { en: 'The Income & spending card no longer repeats the month totals shown by the calendar', vi: 'Thẻ Thu & chi không lặp lại tổng tháng đã có ở lịch' } },
+    ],
+  },
+  {
     version: '1.3.3',
     date: '2026-10-04',
     changes: [

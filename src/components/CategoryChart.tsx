@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { categoryKey } from '../config/categories'
 import { useFormat } from '../lib/format'
-import { isTransfer } from '../lib/transfers'
+import { isTransfer, isTransferIn } from '../lib/transfers'
 import { useI18n } from '../locales'
 import type { Transaction, TxType } from '../lib/types'
 import { cn } from '../lib/cn'
@@ -11,13 +11,13 @@ import { Bubble } from './Bubble'
 import { Card } from './ui'
 
 // Literal class names so Tailwind can see them.
-/** What the chart splits: real spending, income, or money moved into savings / investments. */
+/** What the chart splits: real spending, income, or money moved into and out of savings / investments. */
 export type CatKind = TxType | 'transfer'
 
 const PALETTE = {
   transfer: {
-    bg: ['bg-inc-4', 'bg-cat-5', 'bg-inc-2', 'bg-inc-1', 'bg-inc-3'],
-    stroke: ['stroke-inc-4', 'stroke-cat-5', 'stroke-inc-2', 'stroke-inc-1', 'stroke-inc-3'],
+    bg: ['bg-inc-4', 'bg-cat-5', 'bg-cat-2', 'bg-inc-1', 'bg-inc-3'],
+    stroke: ['stroke-inc-4', 'stroke-cat-5', 'stroke-cat-2', 'stroke-inc-1', 'stroke-inc-3'],
   },
   expense: {
     bg: ['bg-cat-1', 'bg-cat-2', 'bg-cat-3', 'bg-cat-4', 'bg-cat-5'],
@@ -35,7 +35,8 @@ const PALETTE = {
 const HUE_ORDER: Record<CatKind, string[]> = {
   expense: ['food', 'housing', 'transport', 'shopping', 'entertainment'],
   income: ['salary', 'bonus', 'interest', 'investment', 'gift'],
-  transfer: ['savings', 'investment'],
+  // Put in (savings, investment) and taken out to spend (withdrawal, amber like on the calendar).
+  transfer: ['savings', 'investment', 'withdrawal'],
 }
 const hueOf = (type: CatKind, key: string) => HUE_ORDER[type].indexOf(key)
 const TITLE = { expense: 'cat.title', income: 'cat.titleIncome', transfer: 'cat.titleTransfer' } as const
@@ -51,7 +52,7 @@ type Slice = { name: string; pct: number; offset: number; cls: string }
  * missing ones shrink to nothing, the rest slide to their new size and position.
  * Clicking a slice pops it out and shows its name, share and total in the middle.
  */
-export function Donut({ data, total, caption, type }: { data: { name: string; total: number; hue?: number }[]; total: number; caption: string; type: CatKind }) {
+export function Donut({ data, total, caption, center, type }: { data: { name: string; total: number; hue?: number }[]; total: number; caption: string; center?: ReactNode; type: CatKind }) {
   const { t } = useI18n()
   const { formatShortVnd, formatVnd } = useFormat()
   const [selected, setSelected] = useState<string | null>(null)
@@ -144,7 +145,7 @@ export function Donut({ data, total, caption, type }: { data: { name: string; to
         ) : (
           <>
             <span className="font-mono text-[10px] tracking-wider text-subtle uppercase">{caption}</span>
-            <span className="font-mono text-sm font-semibold tabular-nums">{formatShortVnd(total)}</span>
+            {center ?? <span className="font-mono text-sm font-semibold tabular-nums">{formatShortVnd(total)}</span>}
           </>
         )}
       </div>
@@ -179,6 +180,10 @@ export function CategoryChart({ items, aside, emptyText, toolbar, type = 'expens
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const asideData = useMemo(() => group(aside ?? []).map((d) => ({ ...d, key: `a:${d.key}`, name: `${d.name} (${t('cat.assignedSuffix')})`, isAside: true })), [aside, type, categoryName, t])
   const total = data.reduce((s, d) => s + d.total, 0)
+  // Wealth: what went in minus what was taken out to spend (positive = wealth grew).
+  const taken = type === 'transfer' ? data.filter((d) => d.entries.some(isTransferIn)).reduce((s, d) => s + d.total, 0) : 0
+  const net = total - 2 * taken
+  const netText = `${net >= 0 ? '+' : '−'}${formatShortVnd(Math.abs(net))}`
   const asideTotal = asideData.reduce((s, d) => s + d.total, 0)
   // Budgeted categories with nothing spent yet, listed after the rest so the limit stays visible.
   const unused = showBudget ? cats.expense.filter((k) => cats.budgetOf(k) > 0 && !data.some((d) => d.key === k)).map((key) => ({ key, name: categoryName(key), hue: hueOf(type, key), total: 0, count: 0, entries: [] as Transaction[], isAside: false })) : []
@@ -205,7 +210,16 @@ export function CategoryChart({ items, aside, emptyText, toolbar, type = 'expens
     <Card
       className={cn(stacked && 'flex flex-col', className)}
       title={t(TITLE[type])}
-      action={total > 0 && <span className="font-mono text-xs text-subtle">{formatVnd(total)}</span>}
+      action={
+        total > 0 &&
+        (type === 'transfer' && taken > 0 ? (
+          <span className="font-mono text-xs text-subtle tabular-nums">
+            <span className="text-inc-4">↑{formatShortVnd(total - taken)}</span> · <span className="text-cat-2">↓{formatShortVnd(taken)}</span>
+          </span>
+        ) : (
+          <span className="font-mono text-xs text-subtle">{formatVnd(total)}</span>
+        ))
+      }
     >
       {toolbar}
       {rows.length === 0 && unused.length === 0 ? (
@@ -218,7 +232,13 @@ export function CategoryChart({ items, aside, emptyText, toolbar, type = 'expens
       ) : (
         <div className={cn('grid items-center gap-6', stacked ? 'lg:min-h-0 lg:flex-1 lg:grid-rows-[auto_minmax(0,1fr)] lg:items-start' : 'md:grid-cols-[11rem_1fr]')}>
         {data.length > 0 ? (
-          <Donut type={type} data={data} total={total} caption={t(CAPTION[type])} />
+          <Donut
+            type={type}
+            data={data}
+            total={total}
+            caption={t(type === 'transfer' && taken > 0 ? 'cat.net' : CAPTION[type])}
+            center={type === 'transfer' && taken > 0 ? <span className={cn('font-mono text-sm font-semibold tabular-nums', net >= 0 ? 'text-inc-4' : 'text-cat-2')}>{netText}</span> : undefined}
+          />
         ) : (
           <div className="mx-auto grid size-44 shrink-0 place-items-center rounded-full border-[6px] border-surface-2 px-6 text-center text-xs text-subtle">{emptyText ?? t('cat.empty')}</div>
         )}
@@ -247,7 +267,10 @@ export function CategoryChart({ items, aside, emptyText, toolbar, type = 'expens
                   <span className="font-mono text-xs whitespace-nowrap text-subtle">
                     {budget > 0 ? d.count > 0 && t('cat.count', { count: d.count }) : `${t('cat.count', { count: d.count })} · ${Math.round(share * 100)}%`}
                   </span>
-                  <span className="text-right font-mono text-xs whitespace-nowrap tabular-nums sm:w-28">{formatVnd(d.total)}</span>
+                  <span className={cn('text-right font-mono text-xs whitespace-nowrap tabular-nums sm:w-28', type === 'transfer' && (d.entries.some(isTransferIn) ? 'text-cat-2' : 'text-inc-4'))}>
+                    {type === 'transfer' && (d.entries.some(isTransferIn) ? '↓' : '↑')}
+                    {formatVnd(d.total)}
+                  </span>
                 </div>
                 <div className={cn('relative mt-1.5 rounded-full bg-surface-2', budget > 0 ? 'h-2' : 'h-1.5')} role={budget > 0 ? 'meter' : undefined} aria-valuemin={budget > 0 ? 0 : undefined} aria-valuemax={budget > 0 ? budget : undefined} aria-valuenow={budget > 0 ? d.total : undefined}>
                   <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${barCls}`} style={{ width: `${width}%` }} />
@@ -279,7 +302,6 @@ function EntriesBubble({ title, type, items, onClose }: { title: string; type: C
   const { formatVnd } = useFormat()
   const sorted = useMemo(() => [...items].sort((a, b) => b.date.localeCompare(a.date) || (b.time ?? '').localeCompare(a.time ?? '')), [items])
   const total = items.reduce((s, x) => s + x.amount, 0)
-  const sign = type === 'income' ? '+' : '−'
   return (
     <Bubble title={title} onClose={onClose} className="inset-x-0 top-full mt-1">
         <ul className="grid max-h-56 gap-1 overflow-auto max-sm:max-h-none">
@@ -292,8 +314,8 @@ function EntriesBubble({ title, type, items, onClose }: { title: string; type: C
                 <span className="block truncate">{x.note || '—'}</span>
                 {x.forMonth && <span className="block truncate text-[10px] text-subtle">{t('list.forMonth', { month: `${Number(x.forMonth.slice(5, 7))}/${x.forMonth.slice(0, 4)}` })}</span>}
               </span>
-              <span className={cn('font-mono whitespace-nowrap tabular-nums', type === 'income' ? 'text-income' : 'text-fg')}>
-                {sign}
+              <span className={cn('font-mono whitespace-nowrap tabular-nums', isTransferIn(x) ? 'text-cat-2' : type === 'income' ? 'text-income' : 'text-fg')}>
+                {x.type === 'income' ? '+' : '−'}
                 {formatVnd(x.amount)}
               </span>
             </li>

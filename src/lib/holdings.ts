@@ -17,3 +17,32 @@ export function valueOf(h: Holding, today = todayIso()): number {
 }
 
 export const profitOf = (h: Holding, today = todayIso()) => valueOf(h, today) - h.principal
+
+/** Emptied by a full withdrawal: kept (not deleted) so its history stays, but shown as closed. */
+export const isClosed = (h: Holding) => h.principal === 0 && h.currentValue === 0
+
+export interface WithdrawalPlan {
+  /** What the holding is worth on the withdrawal date, before taking anything out. */
+  value: number
+  /** Part of the principal the amount takes back (in proportion to the value, or all of it). */
+  principal: number
+  /** amount − principal: profit taken (booked as interest income), or a loss when negative. */
+  gain: number
+  /** The holding after the withdrawal. */
+  rest: Holding
+}
+
+/**
+ * Takes `amount` out of a holding on `date`. A partial withdrawal takes the principal back in
+ * proportion (`principal × amount / value`), so the rest keeps the same return — and for a holding
+ * with a rate, the smaller principal accrues from the same start date to exactly `value − amount`.
+ * `all` empties the holding whatever the amount (e.g. sold for more or less than its recorded value).
+ */
+export function planWithdrawal(h: Holding, amount: number, all: boolean, date = todayIso()): WithdrawalPlan {
+  const value = valueOf(h, date)
+  if (all || amount >= value) {
+    return { value, principal: h.principal, gain: amount - h.principal, rest: { ...h, principal: 0, currentValue: 0 } }
+  }
+  const principal = value > 0 ? Math.min(h.principal, Math.round((h.principal * amount) / value)) : 0
+  return { value, principal, gain: amount - principal, rest: { ...h, principal: h.principal - principal, currentValue: value - amount } }
+}

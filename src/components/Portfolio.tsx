@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { cn } from '../lib/cn'
 import { todayIso, useFormat } from '../lib/format'
-import { valueOf } from '../lib/holdings'
+import { isClosed, valueOf } from '../lib/holdings'
 import { shiftMonth } from '../lib/format'
 import type { Holding, HoldingKind } from '../lib/types'
 import { useI18n } from '../locales'
@@ -27,6 +27,7 @@ export function Portfolio({
   cashBalance,
   onAdd,
   onEdit,
+  onWithdraw,
   onDelete,
 }: {
   holdings: Holding[]
@@ -34,6 +35,7 @@ export function Portfolio({
   cashBalance: number
   onAdd: () => void
   onEdit: (h: Holding) => void
+  onWithdraw: (h: Holding) => void
   onDelete: (id: string) => void
 }) {
   const { t } = useI18n()
@@ -46,6 +48,9 @@ export function Portfolio({
   const totalAssets = cashBalance + value
   const interestPerYear = sumOf(holdings, (h) => (h.annualRate === null ? 0 : (h.principal * h.annualRate) / 100))
   const byKind = (k: HoldingKind) => holdings.filter((h) => h.kind === k)
+  // Emptied by a full withdrawal: listed apart, kept for the history.
+  const closed = holdings.filter(isClosed)
+  const active = holdings.filter((h) => !isClosed(h))
 
   const parts = [
     { id: 'cash' as const, label: t('pf.cash'), amount: Math.max(0, cashBalance) },
@@ -57,13 +62,13 @@ export function Portfolio({
   // Every holding with its value, biggest first, for the donut and the profit bars.
   const rows = useMemo(
     () =>
-      holdings
+      active
         .map((h) => {
           const now = valueOf(h)
           return { h, now, profit: now - h.principal, ret: h.principal > 0 ? ((now - h.principal) / h.principal) * 100 : null }
         })
         .sort((a, b) => b.now - a.now),
-    [holdings],
+    [active],
   )
   const donutRows = rows.filter((r) => r.now > 0)
   const maxAbsProfit = Math.max(1, ...rows.map((r) => Math.abs(r.profit)))
@@ -101,7 +106,7 @@ export function Portfolio({
           ))}
         </HeroTile>
         <div className="grid content-start gap-4 sm:grid-cols-2">
-          <StatTile label={t('pf.invested')} loading={loading} value={formatVnd(invested)} sub={t('pf.count', { count: holdings.length })} />
+          <StatTile label={t('pf.invested')} loading={loading} value={formatVnd(invested)} sub={t('pf.count', { count: active.length })} />
           <StatTile label={t('pf.value')} loading={loading} value={formatVnd(value)} />
           <StatTile
             label={t('pf.profit')}
@@ -265,6 +270,9 @@ export function Portfolio({
                           <div className="font-mono text-[11px] text-subtle tabular-nums">{t('pf.investedShort', { amount: formatVnd(h.principal) })}</div>
                         </div>
                         <div className="flex text-xs sm:opacity-0 sm:transition-opacity sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+                          <button className="rounded px-2 py-1 text-inc-4 hover:bg-bg" onClick={() => onWithdraw(h)}>
+                            {t('pf.withdraw')}
+                          </button>
                           <button className="rounded px-2 py-1 text-muted hover:bg-bg hover:text-fg" onClick={() => onEdit(h)}>
                             {t('list.edit')}
                           </button>
@@ -279,6 +287,23 @@ export function Portfolio({
               )
             })}
           </div>
+
+          {closed.length > 0 && (
+            <Card title={t('pf.closed')} action={<span className="text-xs text-subtle">{t('pf.closedSub')}</span>}>
+              <ul className="-my-1 divide-y divide-border">
+                {closed.map((h) => (
+                  <li key={h.id} className="group flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 text-sm text-muted">
+                    <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-sm', KIND_BG[h.kind])} />
+                    <span className="min-w-0 flex-1 truncate">{h.name}</span>
+                    <span className="text-xs text-subtle">{t('pf.since', { date: h.startDate })}</span>
+                    <button className="rounded px-2 py-1 text-xs text-muted hover:bg-bg hover:text-expense sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100" onClick={() => confirm(t('pf.confirmDelete')) && onDelete(h.id)}>
+                      {t('list.delete')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
         </>
       )}
     </div>

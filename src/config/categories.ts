@@ -12,6 +12,12 @@ export const categories: Record<TxType, string[]> = {
  */
 export const TRANSFER_CATEGORIES = ['savings', 'investment']
 
+/**
+ * Income category for money taken back out of a savings / investment holding to use. It adds to the
+ * cash balance but is not income, so income totals and charts leave it out (profit is booked as `interest`).
+ */
+export const WITHDRAWAL = 'withdrawal'
+
 /** Default icon per built-in category key (the user can change them in Settings). */
 export const DEFAULT_ICONS: Record<string, string> = {
   food: '🍜',
@@ -30,6 +36,7 @@ export const DEFAULT_ICONS: Record<string, string> = {
   investment: '📈',
   gift: '🎁',
   savings: '🐷',
+  withdrawal: '💸',
   none: '❔',
 }
 

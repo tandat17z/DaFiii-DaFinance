@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '../lib/cn'
 import { downloadCsv } from '../lib/csv'
-import { categoryKey, TRANSFER_CATEGORIES, UNCATEGORIZED } from '../config/categories'
+import { categoryKey, TRANSFER_CATEGORIES, UNCATEGORIZED, WITHDRAWAL } from '../config/categories'
 import { useCategories } from '../lib/settings'
-import { isSpending, isTransfer } from '../lib/transfers'
+import { isEarning, isSpending, isTransfer } from '../lib/transfers'
 import { useFormat } from '../lib/format'
 import { useI18n } from '../locales'
-import type { Transaction } from '../lib/types'
+import type { Holding, Transaction } from '../lib/types'
 import { CategoryPicker } from './CategoryPicker'
 import { EditBubble } from './EditBubble'
 import { Button, Card } from './ui'
@@ -29,7 +29,7 @@ function useColumns(): [number, (el: HTMLDivElement | null) => void] {
 }
 
 /** Month's transactions grouped by day (newest first), each day with its net total. */
-export function TxList({ items, overIds, focusId, label, fileTag, onSave, onDelete, onCategorize }: { items: Transaction[]; overIds?: Set<string>; focusId?: string | null; label: string; fileTag: string; onSave: (t: Transaction) => Promise<boolean>; onDelete: (id: string) => void; onCategorize: (t: Transaction, category: string) => void }) {
+export function TxList({ items, holdings = [], overIds, focusId, label, fileTag, onSave, onDelete, onCategorize }: { items: Transaction[]; holdings?: Holding[]; overIds?: Set<string>; focusId?: string | null; label: string; fileTag: string; onSave: (t: Transaction) => Promise<boolean>; onDelete: (id: string) => void; onCategorize: (t: Transaction, category: string) => void }) {
   const { t } = useI18n()
   const { formatDayHeader, formatVnd, categoryName } = useFormat()
   const cats = useCategories()
@@ -45,12 +45,14 @@ export function TxList({ items, overIds, focusId, label, fileTag, onSave, onDele
     const id = setTimeout(() => focusRef.current?.scrollIntoView({ block: 'center' }), 150)
     return () => clearTimeout(id)
   }, [focusId])
+  // The holding a deposit / withdrawal belongs to: by link, or (older deposits) by its name in the note.
+  const holdingOf = (x: Transaction) => holdings.find((h) => (x.holdingId ? h.id === x.holdingId : h.name === x.note)) ?? null
   const isNone = (x: Transaction) => categoryKey(x.category) === UNCATEGORIZED
   const noneCount = items.filter(isNone).length
   const q = query.trim().toLowerCase()
-  const matchesKind = (x: Transaction) => kind === 'all' || (kind === 'income' ? x.type === 'income' : kind === 'expense' ? isSpending(x) : isTransfer(x))
+  const matchesKind = (x: Transaction) => kind === 'all' || (kind === 'income' ? isEarning(x) : kind === 'expense' ? isSpending(x) : isTransfer(x))
   // Category choices: the keys of the selected type, plus any other key present in this period.
-  const options = [...new Set([...(kind === 'all' ? [...cats.expenseWithTransfers, ...cats.income] : kind === 'transfer' ? TRANSFER_CATEGORIES : cats[kind]), ...items.filter(matchesKind).map((x) => categoryKey(x.category))])]
+  const options = [...new Set([...(kind === 'all' ? [...cats.expenseWithTransfers, ...cats.income] : kind === 'transfer' ? [...TRANSFER_CATEGORIES, WITHDRAWAL] : cats[kind]), ...items.filter(matchesKind).map((x) => categoryKey(x.category))])]
   const shown = items
     .filter(matchesKind)
     .filter((x) => !onlyNone || isNone(x))
@@ -176,7 +178,7 @@ export function TxList({ items, overIds, focusId, label, fileTag, onSave, onDele
                       {/* Always visible on touch screens; revealed on hover / focus where there is a mouse. */}
                       <div className="flex items-center justify-end gap-1 text-xs transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
                         {isNone(tx) && <CategoryPicker tx={tx} onPick={(c) => onCategorize(tx, c)} />}
-                        <EditBubble tx={tx} onSave={onSave} label={t('list.editAria', { category: categoryName(tx.category), amount: formatVnd(tx.amount) })}>
+                        <EditBubble tx={tx} holding={holdingOf(tx)} onSave={onSave} label={t('list.editAria', { category: categoryName(tx.category), amount: formatVnd(tx.amount) })}>
                           {t('list.edit')}
                         </EditBubble>
                         <button

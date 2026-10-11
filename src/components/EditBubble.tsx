@@ -1,18 +1,27 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { categoryKey } from '../config/categories'
+import { categoryKey, TRANSFER_CATEGORIES } from '../config/categories'
+import { cn } from '../lib/cn'
 import { useCategories } from '../lib/settings'
 import { useFormat } from '../lib/format'
+import { entryKind } from '../lib/transfers'
 import { useI18n } from '../locales'
-import type { Transaction } from '../lib/types'
+import type { Holding, Transaction, TxType } from '../lib/types'
 import { Button } from './ui'
 
 const WIDTH = 304
 /** Below this width the form is a bottom sheet: a floating bubble gets lost behind the phone keyboard. */
 const SHEET_MAX = 640
 
-/** Edit button that opens a small bubble next to it to change a transaction in place. */
-export function EditBubble({ tx, label, children, onSave }: { tx: Transaction; label: string; children: ReactNode; onSave: (tx: Transaction) => Promise<boolean> }) {
+const TITLE = { tx: 'form.edit', deposit: 'edit.deposit', withdrawal: 'edit.withdrawal', gain: 'edit.gain' } as const
+
+/**
+ * Edit button that opens a small bubble next to it to change a transaction in place, with the fields
+ * its kind is entered with: an income / expense like the transaction form (type, category, time, for
+ * month); a move into or out of savings / investments like the wealth forms (amount, date, note — the
+ * holding is shown, the category follows the holding's type).
+ */
+export function EditBubble({ tx, holding, label, children, onSave }: { tx: Transaction; holding?: Holding | null; label: string; children: ReactNode; onSave: (tx: Transaction) => Promise<boolean> }) {
   const { t } = useI18n()
   const { categoryName } = useFormat()
   const cats = useCategories()
@@ -20,7 +29,8 @@ export function EditBubble({ tx, label, children, onSave }: { tx: Transaction; l
   const [saving, setSaving] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const [sheet, setSheet] = useState(false)
-  const [d, setD] = useState({ amount: '', category: '', date: '', time: '', note: '', forMonth: '' })
+  const kind = entryKind(tx)
+  const [d, setD] = useState({ type: tx.type as TxType, amount: '', category: '', date: '', time: '', note: '', forMonth: '' })
   const root = useRef<HTMLSpanElement>(null)
   const panel = useRef<HTMLFormElement>(null)
   const set = (patch: Partial<typeof d>) => setD((prev) => ({ ...prev, ...patch }))
@@ -58,7 +68,7 @@ export function EditBubble({ tx, label, children, onSave }: { tx: Transaction; l
       top: window.innerHeight - r.bottom < 420 ? Math.max(8, r.top - 410) : r.bottom + 4,
       left: Math.max(8, Math.min(r.right - WIDTH, window.innerWidth - WIDTH - 8)),
     })
-    setD({ amount: String(tx.amount), category: categoryKey(tx.category), date: tx.date, time: tx.time ?? '', note: tx.note, forMonth: tx.forMonth ?? '' })
+    setD({ type: tx.type, amount: String(tx.amount), category: categoryKey(tx.category), date: tx.date, time: tx.time ?? '', note: tx.note, forMonth: tx.forMonth ?? '' })
     setOpen(true)
   }
 
@@ -67,13 +77,21 @@ export function EditBubble({ tx, label, children, onSave }: { tx: Transaction; l
     const amount = Math.round(Number(d.amount))
     if (!amount || amount <= 0 || saving) return
     setSaving(true)
-    const ok = await onSave({ ...tx, amount, category: d.category, date: d.date, time: d.time || null, note: d.note.trim(), forMonth: d.forMonth || null })
+    const ok = await onSave(
+      kind === 'tx'
+        ? { ...tx, type: d.type, amount, category: d.category, date: d.date, time: d.time || null, note: d.note.trim(), forMonth: d.forMonth || null }
+        : // Moves keep their type and link; only a deposit's category (savings / investment) can change.
+          { ...tx, amount, category: kind === 'deposit' ? d.category : tx.category, date: d.date, note: d.note.trim() },
+    )
     setSaving(false)
     if (ok) setOpen(false)
   }
 
-  const base = tx.type === 'expense' ? cats.expenseWithTransfers : cats.income
+  // Ordinary entries pick from their type's categories (no transfer ones: those are entered as wealth moves).
+  const base = cats[d.type]
   const options = base.includes(d.category) ? base : [d.category, ...base]
+  const pickType = (type: TxType) => set({ type, category: type === d.type ? d.category : (cats[type][0] ?? d.category) })
+  const field = 'grid gap-1 text-xs text-muted'
 
   return (
     <span ref={root}>
@@ -87,7 +105,7 @@ export function EditBubble({ tx, label, children, onSave }: { tx: Transaction; l
           <form
             ref={panel}
             role="dialog"
-            aria-label={t('form.edit')}
+            aria-label={t(TITLE[kind])}
             onSubmit={submit}
             style={sheet ? undefined : { top: pos.top, left: pos.left, width: WIDTH }}
             className={
@@ -96,45 +114,95 @@ export function EditBubble({ tx, label, children, onSave }: { tx: Transaction; l
                 : 'fixed z-50 grid gap-2.5 rounded-xl border border-border-strong bg-surface p-3 shadow-lg shadow-black/40'
             }
           >
-            <label className="grid gap-1 text-xs text-muted">
+            <div className="text-sm font-medium">{t(TITLE[kind])}</div>
+            {kind === 'tx' ? (
+              <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-surface-2 p-0.5" role="radiogroup" aria-label={t('form.type')}>
+                {(['expense', 'income'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="radio"
+                    aria-checked={d.type === type}
+                    onClick={() => pickType(type)}
+                    className={cn('rounded-md py-1 text-xs font-medium transition-colors', d.type === type ? (type === 'expense' ? 'bg-expense/15 text-expense' : 'bg-income/15 text-income') : 'text-muted hover:text-fg')}
+                  >
+                    {type === 'expense' ? t('tile.expense') : t('tile.income')}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-inc-4/30 bg-inc-4/10 px-2.5 py-1.5 text-xs">
+                <span className="text-muted">{t('edit.holding')}</span>
+                <span className="min-w-0 truncate font-medium text-inc-4">{holding?.name ?? (tx.note || t('edit.noHolding'))}</span>
+              </div>
+            )}
+            <label className={field}>
               {t('form.amount')}
               <input autoFocus={!sheet} className="field font-mono" type="number" inputMode="numeric" min={1} step={1} required value={d.amount} onChange={(e) => set({ amount: e.target.value })} />
             </label>
-            <label className="grid gap-1 text-xs text-muted">
-              {t('form.category')}
-              <select className="field" value={d.category} onChange={(e) => set({ category: e.target.value })}>
-                {options.map((c) => (
-                  <option key={c} value={c}>
+            {kind === 'tx' && (
+              <label className={field}>
+                {t('form.category')}
+                <select className="field" value={d.category} onChange={(e) => set({ category: e.target.value })}>
+                  {options.map((c) => (
+                    <option key={c} value={c}>
+                      {cats.iconOf(c)} {categoryName(c)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {kind === 'deposit' && (
+              <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-surface-2 p-0.5" role="radiogroup" aria-label={t('pf.kind')}>
+                {TRANSFER_CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={d.category === c}
+                    onClick={() => set({ category: c })}
+                    className={cn('rounded-md py-1 text-xs font-medium transition-colors', d.category === c ? 'bg-accent/15 text-accent' : 'text-muted hover:text-fg')}
+                  >
                     {cats.iconOf(c)} {categoryName(c)}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="grid gap-1 text-xs text-muted">
+              </div>
+            )}
+            {kind === 'tx' ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className={field}>
+                    {t('form.date')}
+                    <input className="field" type="date" required value={d.date} onChange={(e) => set({ date: e.target.value })} />
+                  </label>
+                  <label className={field}>
+                    {t('form.time')}
+                    <input className="field" type="time" value={d.time} onChange={(e) => set({ time: e.target.value })} />
+                  </label>
+                </div>
+                <label className={field}>
+                  {t('form.forMonth')}
+                  <span className="flex gap-2">
+                    <input className="field min-w-0 flex-1" type="month" value={d.forMonth} onChange={(e) => set({ forMonth: e.target.value })} />
+                    {d.forMonth && (
+                      <Button type="button" onClick={() => set({ forMonth: '' })}>
+                        {t('form.reset')}
+                      </Button>
+                    )}
+                  </span>
+                </label>
+              </>
+            ) : (
+              <label className={field}>
                 {t('form.date')}
                 <input className="field" type="date" required value={d.date} onChange={(e) => set({ date: e.target.value })} />
               </label>
-              <label className="grid gap-1 text-xs text-muted">
-                {t('form.time')}
-                <input className="field" type="time" value={d.time} onChange={(e) => set({ time: e.target.value })} />
-              </label>
-            </div>
-            <label className="grid gap-1 text-xs text-muted">
-              {t('form.forMonth')}
-              <span className="flex gap-2">
-                <input className="field min-w-0 flex-1" type="month" value={d.forMonth} onChange={(e) => set({ forMonth: e.target.value })} />
-                {d.forMonth && (
-                  <Button type="button" onClick={() => set({ forMonth: '' })}>
-                    {t('form.reset')}
-                  </Button>
-                )}
-              </span>
-            </label>
-            <label className="grid gap-1 text-xs text-muted">
+            )}
+            <label className={field}>
               {t('form.note')}
               <input className="field" maxLength={100} value={d.note} onChange={(e) => set({ note: e.target.value })} />
             </label>
+            {kind !== 'tx' && <p className="text-[11px] leading-snug text-subtle">{t('edit.moveHint')}</p>}
             <div className="flex gap-2 pt-0.5">
               <Button type="submit" variant="primary" className="flex-1" disabled={saving}>
                 {saving ? t('form.saving') : t('form.update')}

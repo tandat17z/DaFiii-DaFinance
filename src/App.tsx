@@ -11,6 +11,8 @@ import { SpendingCalendar } from './components/SpendingCalendar'
 import { SpendingCharts } from './components/SpendingCharts'
 import { Dashboard } from './components/Dashboard'
 import { HoldingForm } from './components/HoldingForm'
+import { HoldingHistory } from './components/HoldingHistory'
+import { WithdrawForm, type Withdrawal } from './components/WithdrawForm'
 import { Portfolio } from './components/Portfolio'
 import { TxForm } from './components/TxForm'
 import { TxList } from './components/TxList'
@@ -23,8 +25,9 @@ import { cn } from './lib/cn'
 import { useCategories } from './lib/settings'
 import { usePeriodLabel } from './lib/usePeriodLabel'
 import { todayIso, useFormat } from './lib/format'
-import { valueOf } from './lib/holdings'
-import { isSpending, isTransfer } from './lib/transfers'
+import { isClosed, planWithdrawal, valueOf } from './lib/holdings'
+import { isEarning, isSpending, isTransferIn, isTransferOut } from './lib/transfers'
+import { WITHDRAWAL } from './config/categories'
 import { inPeriod, isAssignedAway, rangeOf, type Unit } from './lib/range'
 import { useAllTransactions, useHoldings, useLegacyImport, useStore } from './lib/storage'
 import { LOCALES, type Locale } from '@tada/kit/i18n'
@@ -72,6 +75,10 @@ export default function App() {
   const [view, setView] = useState<'month' | 'entry' | 'portfolio' | 'dashboard'>('month')
   const holdings = useHoldings()
   const [entry, setEntry] = useState<'tx' | 'holding'>('tx')
+  // Wealth entry: put money in (new / edit holding) or take it out to cash.
+  const [holdingMode, setHoldingMode] = useState<'add' | 'withdraw'>('add')
+  const [withdrawFrom, setWithdrawFrom] = useState<string | null>(null)
+  const [withdrawn, setWithdrawn] = useState<{ amount: number; name: string } | null>(null)
   // The entry just saved, shown as a confirmation on the entry tab.
   const [saved, setSaved] = useState<Transaction | null>(null)
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null)
@@ -100,17 +107,19 @@ export default function App() {
   const itemsByDate = useMemo(() => all.items.filter((x) => x.date >= from && x.date <= to && !isAssignedAway(x)), [all.items, from, to])
   const total = (pick: (x: Transaction) => boolean) => items.reduce((s, x) => s + (pick(x) ? x.amount : 0), 0)
   const count = (pick: (x: Transaction) => boolean) => items.filter(pick).length
-  const isIncome = (x: Transaction) => x.type === 'income'
-  const income = total(isIncome)
+  const income = total(isEarning)
   const expense = total(isSpending)
   // Money moved into savings / investments: out of the cash balance, but not spending.
-  const moved = total(isTransfer)
-  const balance = income - expense - moved
+  const moved = total(isTransferOut)
+  // Money taken back out of them to use: into the cash balance, but not income.
+  const taken = total(isTransferIn)
+  const balance = income - expense - moved + taken
   // Running total over the whole history, whatever period is on screen.
-  const totalIncome = all.items.reduce((s, x) => s + (x.type === 'income' ? x.amount : 0), 0)
+  const totalIncome = all.items.reduce((s, x) => s + (isEarning(x) ? x.amount : 0), 0)
   const totalExpense = all.items.reduce((s, x) => s + (isSpending(x) ? x.amount : 0), 0)
-  const totalMoved = all.items.reduce((s, x) => s + (isTransfer(x) ? x.amount : 0), 0)
-  const totalBalance = totalIncome - totalExpense - totalMoved
+  const totalMoved = all.items.reduce((s, x) => s + (isTransferOut(x) ? x.amount : 0), 0)
+  const totalTaken = all.items.reduce((s, x) => s + (isTransferIn(x) ? x.amount : 0), 0)
+  const totalBalance = totalIncome - totalExpense - totalMoved + totalTaken
   const holdingsValue = holdings.items.reduce((s, h) => s + valueOf(h), 0)
   const holdingsProfit = holdingsValue - holdings.items.reduce((s, h) => s + h.principal, 0)
   // Headline number: cash only, or cash + what savings and investments are worth now (profit/loss included).
@@ -151,15 +160,39 @@ export default function App() {
     const ok = await run(async () => {
       await store.saveHolding(h)
       if (deduct && h.principal > 0) {
-        await store.saveTransaction({ id: crypto.randomUUID(), type: 'expense', amount: h.principal, category: h.kind, date: h.startDate, note: h.name })
+        await store.saveTransaction({ id: crypto.randomUUID(), type: 'expense', amount: h.principal, category: h.kind, date: h.startDate, note: h.name, holdingId: h.id })
       }
     })
     holdings.reload()
     if (ok) setEditingHolding(null)
     return ok
   }
+  /**
+   * Takes money out of a holding back into cash: lowers (or closes) the holding and records the move —
+   * the principal part as a withdrawal (not income), any profit as interest income — both linked to it.
+   */
+  const withdraw = async ({ holding: h, amount, all: closeIt, date, note }: Withdrawal) => {
+    const plan = planWithdrawal(h, amount, closeIt, date)
+    const back = plan.gain > 0 ? plan.principal : amount
+    const ok = await run(async () => {
+      await store.saveHolding(plan.rest)
+      if (back > 0) await store.saveTransaction({ id: crypto.randomUUID(), type: 'income', amount: back, category: WITHDRAWAL, date, note: note || h.name, holdingId: h.id })
+      if (plan.gain > 0) await store.saveTransaction({ id: crypto.randomUUID(), type: 'income', amount: plan.gain, category: 'interest', date, note: note || h.name, holdingId: h.id })
+    })
+    holdings.reload()
+    if (ok) setWithdrawn({ amount, name: h.name })
+    return ok
+  }
+  const openWithdraw = (h: Holding) => {
+    setWithdrawFrom(h.id)
+    setHoldingMode('withdraw')
+    setEntry('holding')
+    setView('entry')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   const openHoldingForm = (h: Holding | null) => {
     setEditingHolding(h)
+    setHoldingMode('add')
     setEntry('holding')
     setView('entry')
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -256,13 +289,41 @@ export default function App() {
                     onCancel={() => setEditing(null)}
                   />
                 ) : (
-                  <HoldingForm key={editingHolding?.id ?? 'new'} editing={editingHolding} onSave={saveHoldingEntry} onCancel={() => setEditingHolding(null)} />
+                  <>
+                    <div role="radiogroup" aria-label={t('entry.holding')} className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-surface p-0.5">
+                      {(['add', 'withdraw'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="radio"
+                          aria-checked={holdingMode === m}
+                          onClick={() => setHoldingMode(m)}
+                          className={cn('rounded-md px-3 py-1.5 text-sm transition-colors', holdingMode === m ? (m === 'withdraw' ? 'bg-cat-2/15 text-cat-2' : 'bg-accent/15 text-accent') : 'text-muted hover:text-fg')}
+                        >
+                          {t(m === 'add' ? 'entry.holdingAdd' : 'entry.holdingWithdraw')}
+                        </button>
+                      ))}
+                    </div>
+                    {holdingMode === 'add' ? (
+                      <HoldingForm key={editingHolding?.id ?? 'new'} editing={editingHolding} onSave={saveHoldingEntry} onCancel={() => setEditingHolding(null)} />
+                    ) : (
+                      <>
+                        {withdrawn && (
+                          <div role="status" className="rounded-xl border border-cat-2/40 bg-cat-2/10 px-4 py-2.5 text-sm">
+                            {t('wd.saved', { amount: formatVnd(withdrawn.amount), name: withdrawn.name })}
+                          </div>
+                        )}
+                        <WithdrawForm key={withdrawFrom ?? 'first'} holdings={holdings.items.filter((h) => !isClosed(h))} initialId={withdrawFrom} onSave={withdraw} />
+                      </>
+                    )}
+                  </>
                 )}
               </div>
+              {entry === 'holding' && <HoldingHistory items={all.items} holdings={holdings.items} />}
               {entry === 'tx' && (
                 <div className="lg:h-[calc(100dvh-6rem)] lg:min-h-[30rem]">
                   <div className="lg:h-full">
-                    <TxList items={items} overIds={overIds} focusId={focusId} label={periodLabel(unit, anchor)} fileTag={`${from}_${to}`} onSave={(tx) => run(() => store.saveTransaction(tx))} onDelete={(id) => void run(() => store.deleteTransaction(id))} onCategorize={(tx, category) => void run(() => store.saveTransaction({ ...tx, category }))} />
+                    <TxList items={items} holdings={holdings.items} overIds={overIds} focusId={focusId} label={periodLabel(unit, anchor)} fileTag={`${from}_${to}`} onSave={(tx) => run(() => store.saveTransaction(tx))} onDelete={(id) => void run(() => store.deleteTransaction(id))} onCategorize={(tx, category) => void run(() => store.saveTransaction({ ...tx, category }))} />
                   </div>
                 </div>
               )}
@@ -278,6 +339,7 @@ export default function App() {
               cashBalance={totalBalance}
               onAdd={() => openHoldingForm(null)}
               onEdit={openHoldingForm}
+              onWithdraw={openWithdraw}
               onDelete={(id) => void run(() => store.deleteHolding(id)).then(holdings.reload)}
             />
           </>
@@ -346,6 +408,11 @@ export default function App() {
                     {t('hero.moved')} <span className="font-mono text-inc-4 tabular-nums">−{formatVnd(totalMoved)}</span>
                   </div>
                 )}
+                {totalTaken > 0 && (
+                  <div className="flex justify-between gap-3 text-muted">
+                    {t('hero.withdrawn')} <span className="font-mono text-cat-2 tabular-nums">+{formatVnd(totalTaken)}</span>
+                  </div>
+                )}
                 {holdingsValue > 0 && (
                   <div className="flex justify-between gap-3 text-muted">
                     {t('pf.holdings')} <span className="font-mono text-fg tabular-nums">{withAssets ? '+' : ''}{formatVnd(holdingsValue)}</span>
@@ -358,9 +425,9 @@ export default function App() {
                 )}
               </HeroTile>
               <div className="grid content-start gap-4 sm:grid-cols-2">
-              <StatTile label={t('tile.income')} dot="bg-income" loading={all.loading} value={formatVnd(income)} valueClass="text-income" sub={t('tile.count', { count: count(isIncome) })} />
+              <StatTile label={t('tile.income')} dot="bg-income" loading={all.loading} value={formatVnd(income)} valueClass="text-income" sub={t('tile.count', { count: count(isEarning) })} />
               <StatTile label={t('tile.expense')} dot="bg-expense" loading={all.loading} value={formatVnd(expense)} valueClass="text-expense" sub={t('tile.count', { count: count(isSpending) })} />
-              <StatTile label={t('tile.moved')} dot="bg-inc-4" loading={all.loading} value={formatVnd(moved)} valueClass="text-inc-4" sub={t('tile.count', { count: count(isTransfer) })} />
+              <StatTile label={t('tile.moved')} dot="bg-inc-4" loading={all.loading} value={formatVnd(moved)} valueClass="text-inc-4" sub={taken > 0 ? t('tile.withdrawnSub', { amount: formatVnd(taken) }) : t('tile.count', { count: count(isTransferOut) })} />
               <StatTile
                 label={t('tile.balance')}
                 loading={all.loading}

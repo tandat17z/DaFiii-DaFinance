@@ -13,6 +13,8 @@ export interface Transaction {
   forMonth?: string | null
   /** HH:MM (local) when known, e.g. from an iPhone receipt capture. */
   time?: string | null
+  /** Holding the money moved into or out of (deposit / withdrawal); absent = none. */
+  holdingId?: string | null
 }
 
 export interface CategoryTotal {

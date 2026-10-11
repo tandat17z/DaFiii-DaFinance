@@ -49,7 +49,6 @@ export function SpendingCharts({ all, anchor, loading }: { all: Transaction[]; a
   const [view, setView] = useState<View>('weekday')
   // Everything is anchored to the page period: its week, its month, or the 12 months ending with it.
   const month = anchor.slice(0, 7)
-  const label = `${Number(month.slice(5, 7))}/${month.slice(0, 4)}` // numeric, e.g. 10/2026
   const monday = mondayOf(anchor)
 
   const totals = useMemo(() => {
@@ -134,15 +133,17 @@ export function SpendingCharts({ all, anchor, loading }: { all: Transaction[]; a
             {dm(monday)} – {dm(addDays(monday, 6))}
           </span>
         )}
-        {/* Same two tiles as the spending calendar. Month view: totals of the 12 bars; otherwise what is assigned to the page's month. */}
-        <div className="grid w-full grid-cols-2 gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs">
-          {SERIES.map((s) => (
-            <div key={s} className="grid gap-0.5">
-              <span className="text-subtle">{view === 'month' ? t(s === 'expense' ? 'tile.expense' : 'tile.income') : t(s === 'expense' ? 'cal.assignedExpense' : 'cal.assignedIncome', { month: label })}</span>
-              <span className={cn('font-mono tabular-nums', STYLE[s].text)}>{formatVnd(view === 'month' ? sum(s) : (totals.mon[s].get(month) ?? 0))}</span>
-            </div>
-          ))}
-        </div>
+        {/* Month view: totals of the 12 bars. Day / week views leave the page month's totals to the calendar below. */}
+        {view === 'month' && (
+          <div className="grid w-full grid-cols-2 gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs">
+            {SERIES.map((s) => (
+              <div key={s} className="grid gap-0.5">
+                <span className="text-subtle">{t(s === 'expense' ? 'tile.expense' : 'tile.income')}</span>
+                <span className={cn('font-mono tabular-nums', STYLE[s].text)}>{formatVnd(sum(s))}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading ? (
